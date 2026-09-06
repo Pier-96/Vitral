@@ -1,0 +1,162 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String          @id @default(cuid())
+  googleSubject String?     @unique
+  email     String?         @unique
+  name      String?
+  image     String?
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+  checkins  WeeklyCheckin[]
+  exercises Exercise[]
+  healthMetrics HealthMetric[]
+  syncDevices SyncDevice[]
+}
+
+model WeeklyCheckin {
+  id          String       @id @default(cuid())
+  userId      String
+  date        DateTime     @unique
+  weekNumber  Int
+  notes       String       @default("")
+  energy      Int?
+  motivation  Int?
+  stress      Int?
+  hunger      Int?
+  recovery    Int?
+  trainingFeeling Int?
+  soreness    Int?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  user        User         @relation(fields: [userId], references: [id])
+  bodyMetrics BodyMetrics?
+  photos      Photo[]
+  healthSummary WeeklyHealthSummary[]
+  aiReports   AiReport[]
+}
+
+model BodyMetrics {
+  id                    String        @id @default(cuid())
+  checkinId             String        @unique
+  weight                Float
+  bmi                   Float?
+  bodyFatPercentage     Float?
+  fatMass               Float?
+  muscleMass            Float?
+  bodyWaterPercentage   Float?
+  visceralFat           Float?
+  leanMass              Float?
+  skeletalMusclePercent Float?
+  boneMass              Float?
+  proteinPercentage     Float?
+  bmr                   Float?
+  bodyAge               Float?
+  waistCm               Float?
+  chestCm               Float?
+  leftArmCm             Float?
+  rightArmCm            Float?
+  leftThighCm           Float?
+  rightThighCm          Float?
+  measuredAt            DateTime?
+  source                String        @default("manual")
+  checkin               WeeklyCheckin @relation(fields: [checkinId], references: [id], onDelete: Cascade)
+}
+
+model Photo {
+  id        String        @id @default(cuid())
+  checkinId String
+  type      String        @default("progress")
+  filePath  String
+  createdAt DateTime      @default(now())
+  checkin   WeeklyCheckin @relation(fields: [checkinId], references: [id], onDelete: Cascade)
+}
+
+model Exercise {
+  id        String              @id @default(cuid())
+  userId    String
+  name      String
+  unit      String              @default("kg")
+  createdAt DateTime            @default(now())
+  user      User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  logs      WeeklyExerciseLog[]
+
+  @@unique([userId, name])
+}
+
+model WeeklyExerciseLog {
+  id          String   @id @default(cuid())
+  exerciseId  String
+  weekStart   DateTime
+  totalSets   Int
+  weight      Float?
+  repetitions String?
+  note        String   @default("")
+  volume      Float?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  exercise    Exercise @relation(fields: [exerciseId], references: [id], onDelete: Cascade)
+
+  @@unique([exerciseId, weekStart])
+}
+
+model HealthMetric {
+  id         String   @id @default(cuid())
+  userId     String
+  metricType String
+  value      Float
+  unit       String
+  recordedAt DateTime
+  startAt    DateTime?
+  endAt      DateTime?
+  source     String
+  externalId String
+  importedAt DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, source, externalId])
+  @@index([userId, metricType, recordedAt])
+}
+
+model WeeklyHealthSummary {
+  id                String        @id @default(cuid())
+  checkinId         String
+  metric            String
+  weeklyValue       Float
+  unit              String
+  daysWithData      Int
+  aggregationMethod String
+  checkin           WeeklyCheckin @relation(fields: [checkinId], references: [id], onDelete: Cascade)
+
+  @@unique([checkinId, metric])
+}
+
+model SyncDevice {
+  id         String    @id @default(cuid())
+  userId     String
+  name       String
+  source     String
+  tokenHash  String    @unique
+  lastSyncAt DateTime?
+  revokedAt  DateTime?
+  createdAt  DateTime  @default(now())
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model AiReport {
+  id        String        @id @default(cuid())
+  checkinId String
+  report    String
+  model     String
+  version   String
+  createdAt DateTime      @default(now())
+  checkin   WeeklyCheckin @relation(fields: [checkinId], references: [id], onDelete: Cascade)
+}
