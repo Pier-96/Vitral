@@ -24,7 +24,7 @@ model User {
 model WeeklyCheckin {
   id          String       @id @default(cuid())
   userId      String
-  date        DateTime     @unique
+  date        DateTime
   weekNumber  Int
   notes       String       @default("")
   energy      Int?
@@ -41,6 +41,8 @@ model WeeklyCheckin {
   photos      Photo[]
   healthSummary WeeklyHealthSummary[]
   aiReports   AiReport[]
+
+  @@unique([userId, date])
 }
 
 model BodyMetrics {
