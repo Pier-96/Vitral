@@ -24,9 +24,9 @@ function App({accessToken}:{accessToken?:string}){
  const [tab,setTab]=useState<'timeline'|'stats'|'compare'>('timeline'); const [modal,setModal]=useState(false); const [trainingModal,setTrainingModal]=useState(false); const [compare,setCompare]=useState<[string,string]>(['3','1']);
  useEffect(()=>{fetch('/api/checkins',{headers:authHeaders}).then(r=>r.ok?r.json():[]).then(remote=>{if(remote.length)setEntries(remote)}).catch(()=>undefined)},[accessToken]);
  const save=(next:Checkin[])=>{setEntries(next);localStorage.setItem('gp-checkins',JSON.stringify(next));void fetch('/api/checkins',{method:'POST',headers:{'Content-Type':'application/json',...authHeaders},body:JSON.stringify(next[0])}).catch(()=>undefined)};
- const newest=entries[0], previous=entries[1]; const diff=newest.weight-previous.weight;
+ const newest=entries[0]??seed[0], previous=entries[1]??newest; const diff=newest.weight-previous.weight;
  const chart=[...entries].reverse().map(x=>({name:`S${x.week}`,peso:x.weight,grasa:x.fat,musculo:x.muscle}));
- const a=entries.find(x=>x.id===compare[0])!, b=entries.find(x=>x.id===compare[1])!;
+ const a=entries.find(x=>x.id===compare[0])??entries[entries.length-1]??newest, b=entries.find(x=>x.id===compare[1])??newest;
  return <main>
   <header><div className="brand"><div className="logo"><Activity size={20}/></div><span>progreso<span className="dot">.</span></span></div><nav>{[['timeline','Timeline'],['stats','Estadísticas'],['compare','Comparar']].map(([id,label])=><button className={tab===id?'active':''} onClick={()=>setTab(id as typeof tab)} key={id}>{label}</button>)}</nav><button className="training-button" onClick={()=>setTrainingModal(true)}><Dumbbell size={17}/> Entrenamiento</button><button className="add" onClick={()=>setModal(true)}><Plus size={18}/> Nuevo check-in</button></header>
   <section className="hero"><div><p className="eyebrow">LUNES, 31 DE AGOSTO · SEMANA {newest.week}</p><h1>Tu progreso,<br/><i>una historia cada semana.</i></h1><p className="sub">Registra lo esencial. Mira más allá de un número.</p></div><div className="hero-stat"><span>peso actual</span><strong>{fmt(newest.weight)} <small>kg</small></strong><em className={diff<=0?'good':''}>{diff<=0?'↓':'↑'} {fmt(Math.abs(diff))} kg <b>vs. semana anterior</b></em></div></section>
