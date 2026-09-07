@@ -3,6 +3,7 @@ import cors from 'cors';
 import express from 'express';
 import { createClient } from '@supabase/supabase-js';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const url = process.env.SUPABASE_URL;
 const publishableKey = process.env.SUPABASE_PUBLISHABLE_KEY;
@@ -36,4 +37,7 @@ app.post('/api/training/week',async(req,res)=>{try{const b=req.body,userId=req.u
 const requests=new Map<string,{count:number;until:number}>();
 app.post('/api/health/webhook',async(req,res)=>{try{const token=req.header('x-health-token')||req.header('authorization')?.replace(/^Bearer\s+/i,'');if(!process.env.HEALTH_WEBHOOK_TOKEN||token!==process.env.HEALTH_WEBHOOK_TOKEN)return res.status(401).json({error:'Token inválido.'});if(process.env.NODE_ENV==='production'&&req.header('x-forwarded-proto')!=='https')return res.status(400).json({error:'HTTPS requerido.'});const now=Date.now(),rate=requests.get(token)||{count:0,until:now+60000};if(now>rate.until){rate.count=0;rate.until=now+60000}if(++rate.count>60)return res.status(429).json({error:'Demasiadas peticiones.'});requests.set(token,rate);const records=req.body?.records;if(!Array.isArray(records)||records.length>500)return res.status(400).json({error:'Payload inválido.'});const userId=process.env.HEALTH_WEBHOOK_USER_ID!;let imported=0;for(const x of records){if(!x.externalId||!x.metricType||!Number.isFinite(Number(x.value))||!x.unit||!x.recordedAt)continue;await must(admin.from('health_metrics').upsert({user_id:userId,metric_type:x.metricType,value:Number(x.value),unit:x.unit,recorded_at:x.recordedAt,start_at:x.startAt||null,end_at:x.endAt||null,source:x.source||'apple_health',external_id:String(x.externalId)},{onConflict:'user_id,source,external_id'}),'Importar salud');imported++}res.status(202).json({imported,received:records.length})}catch(error){res.status(500).json({error:error instanceof Error?error.message:'Error webhook.'})}});
 app.get('/api/backup/status',(_req,res)=>res.json({configured:false,message:'Supabase gestiona la persistencia; configura copias gestionadas antes de producción.'}));
+const clientDist = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../dist');
+app.use(express.static(clientDist));
+app.get('*', (req, res, next) => req.path.startsWith('/api/') ? next() : res.sendFile(path.join(clientDist, 'index.html')));
 app.listen(Number(process.env.PORT||3001),()=>console.log('API Supabase: http://localhost:3001'));
