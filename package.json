@@ -13,7 +13,8 @@
     "db:push": "prisma db push",
     "db:migrate": "prisma migrate dev",
     "migrate:supabase:check": "tsx scripts/migrate-to-supabase.ts --dry-run",
-    "migrate:supabase": "tsx scripts/migrate-to-supabase.ts"
+    "migrate:supabase": "tsx scripts/migrate-to-supabase.ts",
+    "test": "node tests/run.mjs"
   },
   "dependencies": {
     "@prisma/client": "^5.22.0",
@@ -32,6 +33,7 @@
     "vite": "^5.4.14"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "0.3.14",
     "@types/cors": "^2.8.17",
     "@types/express": "^5.0.0",
     "@types/node": "^22.10.2",

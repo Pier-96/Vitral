@@ -6,3 +6,27 @@
 4. Ejecuta la migración desde una copia de seguridad comprobada de SQLite. El script de importación se añadirá al cambiar el servidor a Postgres; hasta entonces SQLite sigue siendo la fuente de verdad.
 
 `MIGRATION_USER_ID` es el UUID de tu cuenta en **Authentication → Users**. Las políticas RLS usan ese UUID para que ningún usuario pueda leer datos ajenos.
+
+## Roles coach / asesorado
+
+Antes de desplegar esta versión del servidor, ejecuta `coach-permissions-migration.sql`
+en SQL Editor. También es necesario para instalaciones nuevas después de `schema.sql`.
+La API utiliza sus funciones transaccionales `activate_coach` y
+`accept_coach_invitation`. La migración se puede repetir y no reasigna datos existentes.
+
+- Cuenta sin invitación y sin rol: puede activar el panel de coach.
+- Invitación + Google: el enlace se conserva durante OAuth y se acepta antes de mostrar el panel.
+- Coach vinculado: crea, edita y elimina el progreso de su asesorado.
+- Asesorado: consulta su progreso y entrenamiento; no puede modificar datos ni activar el rol coach.
+- Los dos participantes consultan registros cuyo `user_id` es el del asesorado.
+- Se mantiene el límite actual de un asesorado por coach y un coach por asesorado.
+- Las cuentas del navegador no pueden escribir tablas de progreso ni cambiar roles directamente.
+
+Si hay relaciones cruzadas previas, la API devuelve un error de vinculación. Antes de
+repararlas hay que identificar el coach definitivo y el titular de cada check-in;
+no se deduce el titular de los datos a partir del orden de registro. No borres ni
+reasignes registros sin resolver esa correspondencia.
+
+Validación local: `npm test` prueba autorización, persistencia de la invitación en
+OAuth y la migración real sobre PostgreSQL embebido, sin conectar a producción.
+`npm run build` comprueba TypeScript y genera la web.
