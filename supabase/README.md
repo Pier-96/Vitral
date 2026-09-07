@@ -19,7 +19,7 @@ La API utiliza sus funciones transaccionales `activate_coach` y
 - Coach vinculado: crea, edita y elimina el progreso de su asesorado.
 - Asesorado: consulta su progreso y entrenamiento; no puede modificar datos ni activar el rol coach.
 - Los dos participantes consultan registros cuyo `user_id` es el del asesorado.
-- Se mantiene el límite actual de un asesorado por coach y un coach por asesorado.
+- Un coach puede tener varios asesorados; cada asesorado mantiene un único coach activo.
 - Las cuentas del navegador no pueden escribir tablas de progreso ni cambiar roles directamente.
 
 Si hay relaciones cruzadas previas, la API devuelve un error de vinculación. Antes de
@@ -30,3 +30,10 @@ reasignes registros sin resolver esa correspondencia.
 Validación local: `npm test` prueba autorización, persistencia de la invitación en
 OAuth y la migración real sobre PostgreSQL embebido, sin conectar a producción.
 `npm run build` comprueba TypeScript y genera la web.
+
+## Actualización multi-asesorado
+
+Ejecuta `multi-client-migration.sql` después de las migraciones de permisos y rutinas. Elimina solo el
+índice que limitaba un asesorado por coach, conserva el índice único de cada asesorado y sustituye las
+RPC de invitación/activación. También deja las tablas de rutinas sin escrituras directas desde el
+navegador. No vuelvas a ejecutar las migraciones antiguas tras ella.

@@ -27,6 +27,11 @@ test('database invitation lifecycle and direct browser permissions',async(t)=>{
   const migration=await readFile(new URL('../supabase/coach-permissions-migration.sql',import.meta.url),'utf8');
   await db.exec(migration);
   await db.exec(migration); // Deployment retries are safe.
+  const routines=await readFile(new URL('../supabase/routine-migration.sql',import.meta.url),'utf8');
+  await db.exec(routines);
+  const multi=await readFile(new URL('../supabase/multi-client-migration.sql',import.meta.url),'utf8');
+  await db.exec(multi);
+  await db.exec(multi); // The follow-up migration is idempotent too.
   for(const [id,email] of [[coach,'coach@example.test'],[client,'client@example.test'],[other,'other@example.test']])await db.query('insert into auth.users(id,email) values($1,$2)',[id,email]);
   await t.test('unreferred account activates; linked account accepts once, retries safely',async()=>{
    await db.query('select activate_coach($1)',[coach]);
@@ -52,6 +57,23 @@ test('database invitation lifecycle and direct browser permissions',async(t)=>{
    await assert.rejects(db.query("select accept_coach_invitation($1,'expired')",[fresh]));
    await assert.rejects(db.query("select accept_coach_invitation($1,'missing')",[fresh]));
    assert.equal((await db.query('select count(*)::int n from coach_clients where client_id=$1',[fresh])).rows[0].n,0);
+  });
+  await t.test('one coach can accept several clients, but a client cannot have two coaches',async()=>{
+   const second='00000000-0000-4000-8000-000000000005';
+   const rival='00000000-0000-4000-8000-000000000006';
+   await db.query('insert into auth.users(id,email) values($1,$2),($3,$4)',[second,'second@example.test',rival,'rival@example.test']);
+   await db.query("insert into coach_invitations(coach_id,token_hash,expires_at) values($1,'second-client',now()+interval '7 days')",[coach]);
+   await db.query("select accept_coach_invitation($1,'second-client')",[second]);
+   assert.equal((await db.query('select count(*)::int n from coach_clients where coach_id=$1',[coach])).rows[0].n,2);
+   await db.query('select activate_coach($1)',[rival]);
+   await db.query("insert into coach_invitations(coach_id,token_hash,expires_at) values($1,'rival-client',now()+interval '7 days')",[rival]);
+   await assert.rejects(db.query("select accept_coach_invitation($1,'rival-client')",[second]));
+  });
+  await t.test('unlink removes only the relation and keeps the client identity',async()=>{
+   await db.query('select unlink_coach_client($1,$2)',[coach,client]);
+   assert.equal((await db.query('select count(*)::int n from coach_clients where client_id=$1',[client])).rows[0].n,0);
+   assert.equal((await db.query('select is_client from profiles where id=$1',[client])).rows[0].is_client,true);
+   await assert.rejects(db.query('select unlink_coach_client($1,$2)',[other,client]));
   });
   await t.test('client can read own progress but cannot write tables, storage, roles or privileged RPCs',async()=>{
    await db.query("insert into weekly_checkins(user_id,date,week_number) values($1,'2026-09-07',37),($2,'2026-09-07',37)",[client,other]);

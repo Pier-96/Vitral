@@ -3,11 +3,12 @@
 create extension if not exists pgcrypto;
 
 create table if not exists public.profiles (
-  id uuid primary key references auth.users(id) on delete cascade, is_coach boolean not null default false,
+  id uuid primary key references auth.users(id) on delete cascade, is_coach boolean not null default false, is_client boolean not null default false,
   email text, name text, image text,
   created_at timestamptz not null default now(), updated_at timestamptz not null default now()
 );
 alter table public.profiles add column if not exists is_coach boolean not null default false;
+alter table public.profiles add column if not exists is_client boolean not null default false;
 create or replace function public.handle_new_user() returns trigger language plpgsql security definer set search_path = public as $$
 begin insert into public.profiles (id,email,name,image) values (new.id,new.email,new.raw_user_meta_data->>'full_name',new.raw_user_meta_data->>'avatar_url') on conflict (id) do update set email=excluded.email,name=excluded.name,image=excluded.image; return new; end; $$;
 drop trigger if exists on_auth_user_created on auth.users;
@@ -53,7 +54,6 @@ create table if not exists public.coach_clients (
 create table if not exists public.coach_invitations (
   id uuid primary key default gen_random_uuid(), coach_id uuid not null references public.profiles(id) on delete cascade, invited_email text, token_hash text not null unique, expires_at timestamptz not null, accepted_at timestamptz, accepted_by uuid references public.profiles(id) on delete set null, created_at timestamptz not null default now()
 );
-create unique index if not exists coach_clients_one_client_per_coach on public.coach_clients(coach_id);
 create unique index if not exists coach_clients_one_coach_per_client on public.coach_clients(client_id);
 
 alter table public.profiles enable row level security;

@@ -3,15 +3,16 @@ import { test } from 'node:test';
 import { progressOwner, validateMembership, type Membership } from '../server/access';
 import { pendingInvitation, clearInvitation } from '../src/invitation';
 
-const coach:Membership={userId:'coach',isCoach:true,clientId:'client',coachId:null};
-const client:Membership={userId:'client',isCoach:false,clientId:null,coachId:'coach'};
+const coach:Membership={userId:'coach',isCoach:true,isClient:false,clientIds:['client','client-two'],coachId:null};
+const client:Membership={userId:'client',isCoach:false,isClient:true,clientIds:[],coachId:'coach'};
 
-test('coach and asesorado read the same subject without a clientId parameter',()=>{
-  assert.equal(progressOwner(coach,undefined),'client');
+test('coach must explicitly select a client; asesorado reads their own history',()=>{
+  assert.throws(()=>progressOwner(coach,undefined));
+  assert.equal(progressOwner(coach,'client'),'client');
   assert.equal(progressOwner(client,undefined),'client');
 });
 test('only linked coach can write, even if client submits their own or another id',()=>{
-  assert.equal(progressOwner(coach,'client',true),'client');
+  assert.equal(progressOwner(coach,'client-two',true),'client-two');
   for(const target of [undefined,'client','coach','stranger'])assert.throws(()=>progressOwner(client,target,true));
   for(const target of ['coach','stranger'])assert.throws(()=>progressOwner(coach,target,true));
 });
@@ -19,7 +20,7 @@ test('neither participant can read a third account',()=>{
   for(const member of [coach,client])assert.throws(()=>progressOwner(member,'stranger'));
 });
 test('onboarding users and unlinked coaches cannot write progress',()=>{
-  for(const isCoach of [true,false])assert.throws(()=>progressOwner({userId:'new',isCoach,clientId:null,coachId:null},undefined,true));
+  for(const isCoach of [true,false])assert.throws(()=>progressOwner({userId:'new',isCoach,isClient:false,clientIds:[],coachId:null},undefined,true));
 });
 test('legacy reciprocal roles fail closed for reads and writes',()=>{
   const invalid={...coach,coachId:'client'};

@@ -27,12 +27,12 @@ async function requireUser(req: express.Request,res:express.Response,next:expres
 app.use('/api',requireUser);
 const digest=(value:string)=>createHash('sha256').update(value).digest('hex');
 async function membership(userId:string) {
-  const [profile, coachLink, clientLink] = await Promise.all([
-    must(admin.from('profiles').select('is_coach').eq('id',userId).single(),'Leer perfil'),
-    must(admin.from('coach_clients').select('client_id').eq('coach_id',userId).maybeSingle(),'Leer asesorado'),
+  const [profile, coachLinks, clientLink] = await Promise.all([
+    must(admin.from('profiles').select('is_coach,is_client').eq('id',userId).single(),'Leer perfil'),
+    must(admin.from('coach_clients').select('client_id').eq('coach_id',userId).order('client_id'),'Leer asesorados'),
     must(admin.from('coach_clients').select('coach_id').eq('client_id',userId).maybeSingle(),'Leer coach')
   ]);
-  const member = {userId,isCoach:Boolean(profile.is_coach),clientId:coachLink?.client_id??null,coachId:clientLink?.coach_id??null};
+  const member = {userId,isCoach:Boolean(profile.is_coach),isClient:Boolean(profile.is_client),clientIds:coachLinks.map((link:any)=>link.client_id),coachId:clientLink?.coach_id??null};
   validateMembership(member);
   return member;
 }
@@ -40,15 +40,15 @@ async function targetForRead(req:express.Request,candidate:unknown){return progr
 async function targetForWrite(req:express.Request,candidate:unknown){return progressOwner(await membership(req.userId!),candidate,true)}
 app.get('/api/access',async(req,res)=>{try{
   const member=await membership(req.userId!);
-  const client=member.clientId?await must(admin.from('profiles').select('id,email,name').eq('id',member.clientId).single(),'Leer asesorado'):null;
-  res.json({isCoach:member.isCoach,isClient:Boolean(member.coachId),client});
+  const clients=member.clientIds.length?await must(admin.from('profiles').select('id,email,name').in('id',member.clientIds).order('name',{ascending:true}).order('email',{ascending:true}),'Leer asesorados'):[];
+  res.json({isCoach:member.isCoach,isClient:member.isClient,clients});
 }catch(error){res.status(error instanceof AccessError?error.status:500).json({error:error instanceof Error?error.message:'Error de acceso.'})}});
 app.post('/api/coach/activate',async(req,res)=>{try{
   const {error}=await admin.rpc('activate_coach',{actor_id:req.userId!});
   if(error)return res.status(error.code==='P0001'?409:500).json({error:error.message});
   res.status(204).end();
 }catch(error){res.status(error instanceof AccessError?error.status:500).json({error:error instanceof Error?error.message:'No se pudo activar el modo coach.'})}});
-app.post('/api/invitations',async(req,res)=>{try{const member=await membership(req.userId!);if(!member.isCoach)return res.status(403).json({error:'Activa el modo coach primero.'});const {data:linked,error:linkedError}=await admin.from('coach_clients').select('id').eq('coach_id',req.userId!).maybeSingle();if(linkedError)throw linkedError;if(linked)return res.status(409).json({error:'Esta primera versión permite una sola asesora por coach.'});const token=randomBytes(32).toString('base64url');await must(admin.from('coach_invitations').insert({coach_id:req.userId!,token_hash:digest(token),expires_at:new Date(Date.now()+1000*60*60*24*7).toISOString()}),'Crear invitación');res.status(201).json({token})}catch(error){res.status(error instanceof AccessError?error.status:500).json({error:error instanceof Error?error.message:'No se pudo crear la invitación.'})}});
+app.post('/api/invitations',async(req,res)=>{try{const member=await membership(req.userId!);if(!member.isCoach)return res.status(403).json({error:'Activa el modo coach primero.'});const token=randomBytes(32).toString('base64url');await must(admin.from('coach_invitations').insert({coach_id:req.userId!,token_hash:digest(token),expires_at:new Date(Date.now()+1000*60*60*24*7).toISOString()}),'Crear invitación');res.status(201).json({token})}catch(error){res.status(error instanceof AccessError?error.status:500).json({error:error instanceof Error?error.message:'No se pudo crear la invitación.'})}});
 app.post('/api/invitations/accept',async(req,res)=>{try{
   const token=req.body?.token;
   if(typeof token!=='string'||!token)return res.status(400).json({error:'Falta el enlace de invitación.'});
@@ -56,6 +56,13 @@ app.post('/api/invitations/accept',async(req,res)=>{try{
   if(error)return res.status(error.code==='P0001'?409:500).json({error:error.message});
   res.status(204).end();
 }catch(error){res.status(error instanceof AccessError?error.status:500).json({error:error instanceof Error?error.message:'No se pudo aceptar la invitación.'})}});
+app.delete('/api/coach/clients/:clientId',async(req,res)=>{try{
+  const member=await membership(req.userId!); if(!member.isCoach)return res.status(403).json({error:'Solo un coach puede desvincular asesorados.'});
+  const clientId=req.params.clientId; if(!member.clientIds.includes(clientId))return res.status(403).json({error:'No tienes permiso para desvincular este asesorado.'});
+  const {error}=await admin.rpc('unlink_coach_client',{actor_id:req.userId!,target_client_id:clientId});
+  if(error)return res.status(error.code==='P0001'?409:500).json({error:error.message});
+  res.status(204).end();
+}catch(error){res.status(error instanceof AccessError?error.status:500).json({error:error instanceof Error?error.message:'No se pudo desvincular el asesorado.'})}});
 
 
 async function signed(pathname:string){const value=await must(admin.storage.from(bucket).createSignedUrl(pathname,3600),'Firmar foto');return value.signedUrl;}

@@ -29,3 +29,13 @@ Si PostgreSQL devuelve `28P01`, corrige `POSTGRES_DATABASE_URL` en `.env` o ejec
 ## Publicar rutinas de entrenamiento
 
 Antes de publicar esta versión, ejecuta [`supabase/routine-migration.sql`](./supabase/routine-migration.sql) en el SQL Editor de Supabase. Crea las tablas para rutinas, días, ejercicios planificados y completados semanales. No modifica los registros históricos de entrenamiento.
+
+## Varios asesorados por coach
+
+Despliega primero una API compatible con listas y, en una ventana controlada, ejecuta
+[`supabase/multi-client-migration.sql`](./supabase/multi-client-migration.sql). El orden completo para
+una instalación nueva es: `schema.sql`, `coach-link-migration.sql`,
+`coach-permissions-migration.sql`, `routine-migration.sql` y finalmente la migración multi-asesorado.
+No ejecutes después los scripts antiguos: restaurarían la función de invitación anterior. La migración
+no borra ni reasigna historial; desvincular elimina exclusivamente la relación. Las URLs de fotos ya
+firmadas pueden seguir funcionando hasta su vencimiento (actualmente una hora).
