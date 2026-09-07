@@ -25,3 +25,7 @@ El webhook para Apple Health quedará disponible en `https://TU-URL/api/health/w
 4. Comprueba que Render publica ese commit y que la web permite entrar con Google. Con una cuenta sin rol, activa coach, genera una invitación y ábrela con la cuenta del asesorado. Ambas deben consultar los mismos registros; solo el coach debe poder escribir.
 
 Si PostgreSQL devuelve `28P01`, corrige `POSTGRES_DATABASE_URL` en `.env` o ejecuta el SQL desde el panel de Supabase. Las claves HTTP de Supabase no sustituyen la contraseña de PostgreSQL. No publiques esta versión antes de que la migración esté aplicada.
+
+## Publicar rutinas de entrenamiento
+
+Antes de publicar esta versión, ejecuta [`supabase/routine-migration.sql`](./supabase/routine-migration.sql) en el SQL Editor de Supabase. Crea las tablas para rutinas, días, ejercicios planificados y completados semanales. No modifica los registros históricos de entrenamiento.
