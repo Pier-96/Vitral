@@ -18,7 +18,8 @@ const num = (v: unknown) => v === '' || v === undefined || v === null || Number.
 const text = (v: unknown) => typeof v === 'string' && v.trim() ? v.trim() : null;
 const monday = (d: Date) => { const copy = new Date(d); copy.setDate(copy.getDate() - ((copy.getDay() + 6) % 7)); return copy.toISOString().slice(0, 10); };
 const repValue = (v: unknown) => { const values = String(v ?? '').match(/\d+(?:[.,]\d+)?/g)?.map(Number) ?? []; return values.length ? values.reduce((a,b)=>a+b,0)/values.length : null; };
-const must = async <T>(request: PromiseLike<{data:T;error:any}>, label:string):Promise<NonNullable<T>> => { const {data,error}=await request;if(error)throw new Error(`${label}: ${error.message}`);if(data===null||data===undefined)throw new Error(`${label}: respuesta vacía`);return data as NonNullable<T>; };
+// Supabase mutations intentionally return no body unless `.select()` is requested.
+const must = async <T>(request: PromiseLike<{data:T;error:any}>, label:string):Promise<NonNullable<T>> => { const {data,error}=await request;if(error)throw new Error(`${label}: ${error.message}`);return data as NonNullable<T>; };
 
 async function requireUser(req: express.Request,res:express.Response,next:express.NextFunction) { if(req.path==='/health/webhook') return next(); const token=req.header('authorization')?.replace(/^Bearer\s+/i,''); if(!token)return res.status(401).json({error:'Inicia sesión para continuar.'}); const {data,error}=await auth.auth.getUser(token); if(error||!data.user)return res.status(401).json({error:'Sesión no válida.'}); req.userId=data.user.id; const meta=data.user.user_metadata||{}; await must(admin.from('profiles').upsert({id:data.user.id,email:data.user.email,name:meta.full_name||meta.name||null,image:meta.avatar_url||null}), 'Actualizar perfil'); next(); }
 app.use('/api',requireUser);
