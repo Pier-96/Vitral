@@ -15,7 +15,7 @@ create unique index if not exists coach_clients_one_coach_per_client on public.c
 create table if not exists public.coach_invitations (
   id uuid primary key default gen_random_uuid(),
   coach_id uuid not null references public.profiles(id) on delete cascade,
-  invited_email text not null,
+  invited_email text,
   token_hash text not null unique,
   expires_at timestamptz not null,
   accepted_at timestamptz,
@@ -28,3 +28,4 @@ alter table public.coach_invitations enable row level security;
 
 create policy "coach or client relationship" on public.coach_clients for select using (coach_id=auth.uid() or client_id=auth.uid());
 create policy "coach invitations" on public.coach_invitations for select using (coach_id=auth.uid());
+alter table public.coach_invitations alter column invited_email drop not null;
