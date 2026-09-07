@@ -3,10 +3,11 @@
 create extension if not exists pgcrypto;
 
 create table if not exists public.profiles (
-  id uuid primary key references auth.users(id) on delete cascade,
+  id uuid primary key references auth.users(id) on delete cascade, is_coach boolean not null default false,
   email text, name text, image text,
   created_at timestamptz not null default now(), updated_at timestamptz not null default now()
 );
+alter table public.profiles add column if not exists is_coach boolean not null default false;
 create or replace function public.handle_new_user() returns trigger language plpgsql security definer set search_path = public as $$
 begin insert into public.profiles (id,email,name,image) values (new.id,new.email,new.raw_user_meta_data->>'full_name',new.raw_user_meta_data->>'avatar_url') on conflict (id) do update set email=excluded.email,name=excluded.name,image=excluded.image; return new; end; $$;
 drop trigger if exists on_auth_user_created on auth.users;
@@ -46,6 +47,14 @@ create table if not exists public.sync_devices (
 create table if not exists public.ai_reports (
   id uuid primary key default gen_random_uuid(), checkin_id uuid not null references public.weekly_checkins(id) on delete cascade, report text not null, model text not null, version text not null, created_at timestamptz not null default now(), unique(checkin_id,model,version)
 );
+create table if not exists public.coach_clients (
+  id uuid primary key default gen_random_uuid(), coach_id uuid not null references public.profiles(id) on delete cascade, client_id uuid not null references public.profiles(id) on delete cascade, created_at timestamptz not null default now(), unique(coach_id,client_id), check(coach_id<>client_id)
+);
+create table if not exists public.coach_invitations (
+  id uuid primary key default gen_random_uuid(), coach_id uuid not null references public.profiles(id) on delete cascade, invited_email text not null, token_hash text not null unique, expires_at timestamptz not null, accepted_at timestamptz, accepted_by uuid references public.profiles(id) on delete set null, created_at timestamptz not null default now()
+);
+create unique index if not exists coach_clients_one_client_per_coach on public.coach_clients(coach_id);
+create unique index if not exists coach_clients_one_coach_per_client on public.coach_clients(client_id);
 
 alter table public.profiles enable row level security;
 alter table public.weekly_checkins enable row level security;
@@ -57,6 +66,8 @@ alter table public.health_metrics enable row level security;
 alter table public.weekly_health_summaries enable row level security;
 alter table public.sync_devices enable row level security;
 alter table public.ai_reports enable row level security;
+alter table public.coach_clients enable row level security;
+alter table public.coach_invitations enable row level security;
 create policy "own profile" on public.profiles for all using (id=auth.uid()) with check (id=auth.uid());
 create policy "own checkins" on public.weekly_checkins for all using (user_id=auth.uid()) with check (user_id=auth.uid());
 create policy "own exercises" on public.exercises for all using (user_id=auth.uid()) with check (user_id=auth.uid());
@@ -67,6 +78,8 @@ create policy "own photos" on public.photos for all using (exists(select 1 from 
 create policy "own exercise logs" on public.weekly_exercise_logs for all using (exists(select 1 from public.exercises e where e.id=exercise_id and e.user_id=auth.uid())) with check (exists(select 1 from public.exercises e where e.id=exercise_id and e.user_id=auth.uid()));
 create policy "own health summaries" on public.weekly_health_summaries for all using (exists(select 1 from public.weekly_checkins c where c.id=checkin_id and c.user_id=auth.uid())) with check (exists(select 1 from public.weekly_checkins c where c.id=checkin_id and c.user_id=auth.uid()));
 create policy "own ai reports" on public.ai_reports for all using (exists(select 1 from public.weekly_checkins c where c.id=checkin_id and c.user_id=auth.uid())) with check (exists(select 1 from public.weekly_checkins c where c.id=checkin_id and c.user_id=auth.uid()));
+create policy "coach or client relationship" on public.coach_clients for select using (coach_id=auth.uid() or client_id=auth.uid());
+create policy "coach invitations" on public.coach_invitations for select using (coach_id=auth.uid());
 
 insert into storage.buckets (id,name,public) values ('progress-photos','progress-photos',false) on conflict (id) do nothing;
 create policy "own progress photos" on storage.objects for all using (bucket_id='progress-photos' and (storage.foldername(name))[1]=auth.uid()::text) with check (bucket_id='progress-photos' and (storage.foldername(name))[1]=auth.uid()::text);
